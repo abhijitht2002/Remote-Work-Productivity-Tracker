@@ -1,5 +1,6 @@
-import User from "../models/User";
-import { asyncHandler } from "../utils/asyncHandler";
+import User from "../models/User.js";
+import bcrypt from "bcrypt";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const getUsers = asyncHandler(async (req, res) => {
   const { role } = req.query;
