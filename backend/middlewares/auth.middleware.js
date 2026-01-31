@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
-import env from "../config/env";
-import { asyncHandler } from "../utils/asyncHandler";
+import env from "../config/env.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const checkAuth = asyncHandler(async (req, res, next) => {
   const authHeader = req.headers.authorization;

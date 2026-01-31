@@ -1,7 +1,7 @@
-import User from "../models/User";
+import User from "../models/User.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import env from "../config/env";
+import env from "../config/env.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const createEmpl = asyncHandler(async (req, res) => {
