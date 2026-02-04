@@ -54,7 +54,9 @@ export const assignTask = asyncHandler(async (req, res) => {
   res.status(201).json({ message: "Task assigned", task });
 });
 
-// export const extendDate = asyncHandler(async (req, res) => {});
+export const extendDate = asyncHandler(async (req, res) => {
+  
+});
 
 export const getAllEmployees = asyncHandler(async (req, res) => {
   const employees = await User.find({ role: "EMPLOYEE" }).select("name email");
