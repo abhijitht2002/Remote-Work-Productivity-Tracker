@@ -1,6 +1,8 @@
 import express from "express";
 import connectDB from "./config/db.js";
 import adminRoutes from "./routes/admin.routes.js";
+import managerRoutes from "./routes/manager.routes.js";
+import employeeRoutes from "./routes/employee.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import noteRoutes from "./routes/notes.routes.js";
 import cors from "cors";
@@ -11,12 +13,19 @@ const app = express();
 
 app.use(express.json());
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    // credentials: true,
+  }),
+);
 
 connectDB();
 
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/manager", managerRoutes);
+app.use("/api/employee", employeeRoutes);
 app.use("/api/notes", noteRoutes);
 
 app.use(errorHandler);

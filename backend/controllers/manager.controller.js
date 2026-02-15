@@ -1,6 +1,7 @@
-import Task from "../models/Task";
-import User from "../models/User";
-import { asyncHandler } from "../utils/asyncHandler";
+import Task from "../models/Task.js";
+import User from "../models/User.js";
+import TimeLog from "../models/TimeLog.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const createTask = asyncHandler(async (req, res) => {
   const { title, description, start_date, due_date, assigned_to } = req.body;
@@ -23,8 +24,60 @@ export const createTask = asyncHandler(async (req, res) => {
   });
 });
 
-export const getTask = asyncHandler(async (req, res) => {
-  // get task by man_id
+export const getTasks = asyncHandler(async (req, res) => {
+  const { type, page = 1, limit = 8 } = req.query;
+  const managerId = req.user.id;
+
+  let filter = { assigned_by: managerId };
+
+  if (type === "assigned") {
+    filter.assigned_to = { $ne: null };
+    filter.status = { $ne: "DONE" };
+  } else if (type === "unassigned") {
+    filter.assigned_to = null;
+    filter.status = { $ne: "DONE" };
+  } else if (type === "closed") {
+    filter.status = "DONE";
+  }
+
+  const skip = (page - 1) * limit;
+
+  const tasks = await Task.find(filter)
+    .populate("assigned_to", "name email")
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(Number(limit))
+    .lean();
+
+  const taskIds = tasks.map((t) => t._id);
+
+  const timeLogs = await TimeLog.aggregate([
+    { $match: { task: { $in: taskIds } } },
+    {
+      $group: {
+        _id: "$task",
+        totalTime: { $sum: "$duration" }, // duration in seconds
+      },
+    },
+  ]);
+
+  const timeMap = {};
+  timeLogs.forEach((log) => {
+    timeMap[log._id.toString()] = log.totalTime;
+  });
+
+  const tasksWithTime = tasks.map((task) => ({
+    ...task,
+    totalTime: timeMap[task._id.toString()] || 0,
+  }));
+
+  const total = await Task.countDocuments(filter);
+
+  res.status(200).json({
+    tasks: tasksWithTime,
+    page: Number(page),
+    totalPages: Math.ceil(total / limit),
+  });
 });
 
 export const assignTask = asyncHandler(async (req, res) => {
@@ -54,12 +107,58 @@ export const assignTask = asyncHandler(async (req, res) => {
   res.status(201).json({ message: "Task assigned", task });
 });
 
-export const extendDate = asyncHandler(async (req, res) => {
-  
+export const extendDate = asyncHandler(async (req, res) => {});
+
+export const getEmployees = asyncHandler(async (req, res) => {
+  const employees = await User.find({ role: "EMPLOYEE" })
+    .select("name email")
+    .sort({ name: 1 })
+    .lean();
+
+  res.status(200).json({ employees });
 });
 
-export const getAllEmployees = asyncHandler(async (req, res) => {
-  const employees = await User.find({ role: "EMPLOYEE" }).select("name email");
+// GET /api/tasks/:id
+export const getTaskById = async (req, res, next) => {
+  try {
+    const task = await Task.findById(req.params.id)
+      .populate("assigned_to", "name email")
+      .populate("assigned_by", "name email");
 
-  res.status(201).json({ employees });
+    if (!task) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+
+    res.json(task);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const searchTasks = asyncHandler(async (req, res) => {
+  const { query = "", type } = req.query;
+  const managerId = req.user.id;
+
+  let filter = {
+    assigned_by: managerId,
+    title: { $regex: query, $options: "i" }, // case-insensitive search
+  };
+
+  // keep SAME logic as getTasks (very important)
+  if (type === "assigned") {
+    filter.assigned_to = { $ne: null };
+    filter.status = { $ne: "DONE" };
+  } else if (type === "unassigned") {
+    filter.assigned_to = null;
+    filter.status = { $ne: "DONE" };
+  } else if (type === "closed") {
+    filter.status = "DONE";
+  }
+
+  const tasks = await Task.find(filter)
+    .populate("assigned_to", "name email")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  res.status(200).json({ tasks });
 });
