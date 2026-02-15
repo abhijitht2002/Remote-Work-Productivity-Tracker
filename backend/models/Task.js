@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import mongoosePaginate from "mongoose-paginate-v2";
 
 const taskSchema = new mongoose.Schema(
   {
@@ -36,5 +37,8 @@ const taskSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+// mongoose pagination plugin
+taskSchema.plugin(mongoosePaginate);
 
 export default mongoose.model("Task", taskSchema);

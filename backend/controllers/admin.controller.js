@@ -1,14 +1,84 @@
 import User from "../models/User.js";
 import bcrypt from "bcrypt";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import Task from "../models/Task.js";
 
-export const getUsers = asyncHandler(async (req, res) => {
-  const { role } = req.query;
-  const filter = role ? { role } : {};
-  const users = await User.find(filter).select("-password_hash");
+export const listEmployees = async (req, res) => {
+  const { page = 1, limit = 5 } = req.query;
 
-  res.status(200).json({ users });
-});
+  const employees = await User.paginate(
+    { role: "EMPLOYEE" },
+    {
+      page,
+      limit,
+      lean: true,
+      sort: { createdAt: -1 },
+    },
+  );
+
+  const docsWithStats = await Promise.all(
+    employees.docs.map(async (emp) => {
+      const tasks = await Task.countDocuments({
+        assigned_to: emp._id,
+      });
+
+      const completed = await Task.countDocuments({
+        assigned_to: emp._id,
+        status: "DONE",
+      });
+
+      return {
+        ...emp,
+        tasks,
+        completed,
+        workTime: "0h",
+      };
+    }),
+  );
+
+  res.json({
+    ...employees,
+    docs: docsWithStats,
+  });
+};
+
+export const listManagers = async (req, res) => {
+  const { page = 1, limit = 5 } = req.query;
+
+  const managers = await User.paginate(
+    { role: "MANAGER" },
+    {
+      page,
+      limit,
+      lean: true,
+      sort: { createdAt: -1 },
+    },
+  );
+
+  const docsWithStats = await Promise.all(
+    managers.docs.map(async (manager) => {
+      const tasksCreated = await Task.countDocuments({
+        assigned_by: manager._id,
+      });
+
+      const employeesAssigned = await Task.distinct("assigned_to", {
+        assigned_by: manager._id,
+        assigned_to: { $ne: null },
+      });
+
+      return {
+        ...manager,
+        tasksCreated,
+        employeesAssigned: employeesAssigned.length,
+      };
+    }),
+  );
+
+  res.json({
+    ...managers,
+    docs: docsWithStats,
+  });
+};
 
 export const createManager = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
@@ -27,5 +97,72 @@ export const createManager = asyncHandler(async (req, res) => {
   });
   await user.save();
 
-  res.status(200).json({ message: "Manager created", userId: user._id });
+  res.status(201).json({ message: "Manager created", userId: user._id });
 });
+
+export const getAdminSummary = async (req, res) => {
+  const totalUsers = await User.countDocuments();
+  const totalManagers = await User.countDocuments({ role: "MANAGER" });
+  const totalEmployees = await User.countDocuments({ role: "EMPLOYEE" });
+  const totalTasks = await Task.countDocuments();
+
+  const recentManagers = await User.find({ role: "MANAGER" })
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .lean();
+
+  const managersWithStats = await Promise.all(
+    recentManagers.map(async (manager) => {
+      const tasksCreated = await Task.countDocuments({
+        assigned_by: manager._id,
+      });
+
+      const employeesAssigned = await Task.distinct("assigned_to", {
+        assigned_by: manager._id,
+        assigned_to: { $ne: null },
+      });
+
+      return {
+        ...manager,
+        tasksCreated,
+        employeesAssigned: employeesAssigned.length,
+      };
+    }),
+  );
+
+  const recentEmployees = await User.find({ role: "EMPLOYEE" })
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .lean();
+
+  const employeesWithStats = await Promise.all(
+    recentEmployees.map(async (emp) => {
+      const tasksAssigned = await Task.countDocuments({
+        assigned_to: emp._id,
+      });
+
+      const tasksCompleted = await Task.countDocuments({
+        assigned_to: emp._id,
+        status: "DONE",
+      });
+
+      return {
+        ...emp,
+        tasksAssigned,
+        tasksCompleted,
+        totalWorkTime: "0h",
+      };
+    }),
+  );
+
+  res.json({
+    metrics: {
+      totalUsers,
+      totalManagers,
+      totalEmployees,
+      totalTasks,
+    },
+    recentManagers: managersWithStats,
+    recentEmployees: employeesWithStats,
+  });
+};

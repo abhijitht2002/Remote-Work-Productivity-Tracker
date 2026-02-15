@@ -27,7 +27,7 @@ export const unifiedLogin = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
   if (!user || !(await bcrypt.compare(password, user.password_hash))) {
-    return res.status(404).json({ error: "Invalid credentials" });
+    return res.status(401).json({ error: "Invalid credentials" });
   }
 
   const token = jwt.sign(
